@@ -2,19 +2,51 @@ import streamlit as st
 import pandas as pd
 import os
 import shutil
+import zipfile
+import io
+from datetime import datetime, timedelta
 from PIL import Image
 
-# Constants
+# === Constants ===
 CSV_FILE = "du_lieu_bat_dong_san.csv"
 IMAGE_DIR = "anh_nha"
 SHARED_DIR = "chia_se"
+BACKUP_DIR = "backups"
 IMAGE_WIDTH = 120
 
-# Ensure necessary directories exist
+# === Ensure necessary directories ===
 os.makedirs(IMAGE_DIR, exist_ok=True)
 os.makedirs(SHARED_DIR, exist_ok=True)
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
-# Load or create dataframe
+# === Auto Backup Every 3 Days ===
+def auto_backup():
+    today = datetime.today()
+    for fname in os.listdir(BACKUP_DIR):
+        if fname.endswith("_backup.csv"):
+            last_backup = datetime.strptime(fname.split("_")[0], "%Y%m%d")
+            if today - last_backup < timedelta(days=3):
+                return  # already backed up within 3 days
+
+    # Backup CSV
+    csv_backup_path = os.path.join(BACKUP_DIR, f"{today.strftime('%Y%m%d')}_backup.csv")
+    if os.path.exists(CSV_FILE):
+        shutil.copy(CSV_FILE, csv_backup_path)
+
+    # Backup images to ZIP
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for foldername, subfolders, filenames in os.walk(IMAGE_DIR):
+            for filename in filenames:
+                filepath = os.path.join(foldername, filename)
+                arcname = os.path.relpath(filepath, IMAGE_DIR)
+                zipf.write(filepath, arcname)
+    with open(os.path.join(BACKUP_DIR, f"{today.strftime('%Y%m%d')}_images.zip"), "wb") as f:
+        f.write(zip_buffer.getvalue())
+
+auto_backup()
+
+# === Load or initialize data ===
 if os.path.exists(CSV_FILE):
     df = pd.read_csv(CSV_FILE)
 else:
@@ -23,11 +55,11 @@ else:
 def save_data():
     df.to_csv(CSV_FILE, index=False)
 
-# Page setup
+# === Streamlit UI ===
 st.set_page_config(page_title="Quản lý BĐS", layout="wide")
 st.title("🏘️ Ứng dụng Quản lý Bất động sản")
 
-# Session state setup
+# === Session state ===
 if "reset_form" not in st.session_state:
     st.session_state.reset_form = False
 if "search_triggered" not in st.session_state:
@@ -92,7 +124,7 @@ with st.form("add_form"):
         except ValueError:
             st.error("❌ Vui lòng nhập đúng định dạng giá.")
 
-# === Edit Form (if triggered) ===
+# === Edit Form ===
 if st.session_state.edit_trigger and st.session_state.edit_index is not None:
     st.header("✏️ Chỉnh sửa thông tin nhà")
     edit_idx = st.session_state.edit_index
@@ -180,9 +212,8 @@ def filter_data(df):
 
 filtered = filter_data(df) if st.session_state.search_triggered else df.copy()
 
-# === Display Results (ALWAYS VISIBLE) ===
+# === Display Results ===
 st.header("📋 Danh sách nhà")
-
 if filtered.empty:
     st.warning("⚠️ Không tìm thấy kết quả.")
 else:
@@ -244,18 +275,44 @@ else:
                     st.session_state["edit_trigger"] = True
                     st.rerun()
 
-# === Export & Restore CSV ===
+# === Backup Section ===
 st.markdown("### 💾 Sao lưu và khôi phục")
 
 csv_export = df.to_csv(index=False).encode("utf-8-sig")
 st.download_button("⬇️ Tải xuống dữ liệu (CSV)", data=csv_export, file_name="du_lieu_bat_dong_san.csv", mime="text/csv")
 
-uploaded_csv = st.file_uploader("📤 Khôi phục dữ liệu từ file CSV", type=["csv"], key="restore_csv")
-if uploaded_csv is not None:
-    try:
-        df = pd.read_csv(uploaded_csv)
-        save_data()
-        st.success("✅ Đã khôi phục dữ liệu từ file CSV.")
-        st.rerun()
-    except Exception as e:
-        st.error(f"❌ Lỗi khi đọc file CSV: {e}")
+# Download image ZIP
+def zip_all_images():
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for foldername, subfolders, filenames in os.walk(IMAGE_DIR):
+            for filename in filenames:
+                filepath = os.path.join(foldername, filename)
+                arcname = os.path.relpath(filepath, IMAGE_DIR)
+                zipf.write(filepath, arcname)
+    zip_buffer.seek(0)
+    return zip_buffer
+
+if os.listdir(IMAGE_DIR):
+    image_zip = zip_all_images()
+    st.download_button("🖼️ Tải xuống toàn bộ ảnh", data=image_zip, file_name="anh_bds.zip", mime="application/zip")
+
+# Restore both CSV and ZIP
+st.markdown("### 🔁 Phục hồi dữ liệu")
+
+restore_csv = st.file_uploader("📤 Tải lên file CSV đã sao lưu", type=["csv"])
+restore_zip = st.file_uploader("📤 Tải lên file ZIP ảnh đã sao lưu", type=["zip"])
+
+if st.button("♻️ Phục hồi toàn bộ"):
+    if restore_csv and restore_zip:
+        try:
+            df = pd.read_csv(restore_csv)
+            save_data()
+            with zipfile.ZipFile(restore_zip, 'r') as zipf:
+                zipf.extractall(IMAGE_DIR)
+            st.success("✅ Phục hồi dữ liệu thành công!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Lỗi khi phục hồi: {e}")
+    else:
+        st.warning("⚠️ Cần cả CSV và ZIP để phục hồi toàn bộ dữ liệu.")
