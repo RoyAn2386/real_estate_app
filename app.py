@@ -27,12 +27,17 @@ def save_data():
 st.set_page_config(page_title="Quản lý BĐS", layout="wide")
 st.title("🏘️ Ứng dụng Quản lý Bất động sản")
 
-# === Reset logic ===
+# Session state setup
 if "reset_form" not in st.session_state:
     st.session_state.reset_form = False
 if "search_triggered" not in st.session_state:
     st.session_state.search_triggered = False
+if "edit_trigger" not in st.session_state:
+    st.session_state.edit_trigger = False
+if "edit_index" not in st.session_state:
+    st.session_state.edit_index = None
 
+# === Reset logic ===
 if st.session_state.reset_form:
     for key in ["loai_hinh", "du_an", "price", "phone", "profit", "notice"]:
         st.session_state[key] = ""
@@ -87,6 +92,61 @@ with st.form("add_form"):
         except ValueError:
             st.error("❌ Vui lòng nhập đúng định dạng giá.")
 
+# === Edit Form (if triggered) ===
+if st.session_state.edit_trigger and st.session_state.edit_index is not None:
+    st.header("✏️ Chỉnh sửa thông tin nhà")
+    edit_idx = st.session_state.edit_index
+    edit_row = df.loc[edit_idx]
+
+    with st.form("edit_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_loai_hinh = st.text_input("Loại hình", value=edit_row["Loại hình"])
+            new_price = st.text_input("Giá", value=str(edit_row["Giá"]))
+            new_profit = st.text_input("Lợi nhuận", value=edit_row["Lợi nhuận"])
+        with col2:
+            new_du_an = st.text_input("Dự án", value=edit_row["Dự án"])
+            new_phone = st.text_input("SĐT", value=edit_row["SĐT"])
+            new_notice = st.text_area("Ghi chú", value=edit_row["Notice"], height=80)
+
+        uploaded_edit_files = st.file_uploader(
+            "Upload ảnh mới (nếu muốn ghi đè)", 
+            accept_multiple_files=True, 
+            type=['png', 'jpg', 'jpeg', 'tif'],
+            key=f"edit_uploader_{edit_idx}"
+        )
+
+        submitted_edit = st.form_submit_button("💾 Lưu thay đổi")
+
+        if submitted_edit:
+            try:
+                new_price_val = float(new_price)
+                # Update info
+                df.at[edit_idx, "Loại hình"] = new_loai_hinh
+                df.at[edit_idx, "Dự án"] = new_du_an
+                df.at[edit_idx, "Giá"] = new_price_val
+                df.at[edit_idx, "SĐT"] = new_phone
+                df.at[edit_idx, "Lợi nhuận"] = new_profit
+                df.at[edit_idx, "Notice"] = new_notice
+
+                # Handle image replacement
+                edit_folder_path = df.at[edit_idx, "Thư mục ảnh"]
+                if uploaded_edit_files:
+                    for f in os.listdir(edit_folder_path):
+                        os.remove(os.path.join(edit_folder_path, f))
+                    for uploaded_file in uploaded_edit_files:
+                        with open(os.path.join(edit_folder_path, uploaded_file.name), "wb") as f:
+                            f.write(uploaded_file.read())
+
+                save_data()
+                st.success("✅ Đã cập nhật thành công!")
+                st.session_state.edit_trigger = False
+                st.session_state.edit_index = None
+                st.rerun()
+
+            except ValueError:
+                st.error("❌ Vui lòng nhập đúng định dạng giá.")
+
 # === Search Section ===
 st.header("🔍 Tìm kiếm nhà")
 
@@ -100,7 +160,6 @@ with col3:
 with col4:
     max_price = st.text_input("Giá tối đa", max_chars=20, key="max_price")
 
-# Search button
 if st.button("🔎 Tìm kiếm"):
     st.session_state.search_triggered = True
 
@@ -155,7 +214,7 @@ else:
                 **📝 Ghi chú:** {row['Notice']}
             """)
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("📤 Chia sẻ", key=f"share_{idx}"):
                     share_folder = os.path.join(SHARED_DIR, f"{row['Loại hình']}_{idx}")
@@ -181,4 +240,8 @@ else:
                     st.success("✅ Đã xóa mục thành công!")
                     st.rerun()
 
-
+            with col3:
+                if st.button("✏️ Chỉnh sửa", key=f"edit_{idx}"):
+                    st.session_state["edit_index"] = idx
+                    st.session_state["edit_trigger"] = True
+                    st.rerun()
