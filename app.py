@@ -121,7 +121,6 @@ if st.session_state.edit_trigger and st.session_state.edit_index is not None:
         if submitted_edit:
             try:
                 new_price_val = float(new_price)
-                # Update info
                 df.at[edit_idx, "Loại hình"] = new_loai_hinh
                 df.at[edit_idx, "Dự án"] = new_du_an
                 df.at[edit_idx, "Giá"] = new_price_val
@@ -129,7 +128,6 @@ if st.session_state.edit_trigger and st.session_state.edit_index is not None:
                 df.at[edit_idx, "Lợi nhuận"] = new_profit
                 df.at[edit_idx, "Notice"] = new_notice
 
-                # Handle image replacement
                 edit_folder_path = df.at[edit_idx, "Thư mục ảnh"]
                 if uploaded_edit_files:
                     for f in os.listdir(edit_folder_path):
@@ -245,3 +243,19 @@ else:
                     st.session_state["edit_index"] = idx
                     st.session_state["edit_trigger"] = True
                     st.rerun()
+
+# === Export & Restore CSV ===
+st.markdown("### 💾 Sao lưu và khôi phục")
+
+csv_export = df.to_csv(index=False).encode("utf-8-sig")
+st.download_button("⬇️ Tải xuống dữ liệu (CSV)", data=csv_export, file_name="du_lieu_bat_dong_san.csv", mime="text/csv")
+
+uploaded_csv = st.file_uploader("📤 Khôi phục dữ liệu từ file CSV", type=["csv"], key="restore_csv")
+if uploaded_csv is not None:
+    try:
+        df = pd.read_csv(uploaded_csv)
+        save_data()
+        st.success("✅ Đã khôi phục dữ liệu từ file CSV.")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Lỗi khi đọc file CSV: {e}")
