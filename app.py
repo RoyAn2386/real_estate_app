@@ -591,18 +591,18 @@ auto_backup()
 
 # === Page setup ===
 st.set_page_config(page_title="Quản lý BĐS", layout="wide")
-st.title("🏘️ Ứng dụng Quản lý Bất động sản")
+st.title("❤️ Anh Yêu Em ❤️")
 
-# === Show Last Backup Info ===
-backup_files = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith("_backup.csv")])
-if backup_files:
-    last_backup = backup_files[-1][:8]
-    st.info(f"📦 Bản sao lưu gần nhất: `{last_backup}`")
+# # === Show Last Backup Info ===
+# backup_files = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith("_backup.csv")])
+# if backup_files:
+#     last_backup = backup_files[-1][:8]
+#     st.info(f"📦 Bản sao lưu gần nhất: `{last_backup}`")
 
-# === Manual Backup Button ===
-if st.button("💾 Sao lưu thủ công"):
-    create_backup()
-    st.success("✅ Đã sao lưu thủ công!")
+# # === Manual Backup Button ===
+# if st.button("💾 Sao lưu thủ công"):
+#     create_backup()
+#     st.success("✅ Đã sao lưu thủ công!")
 
 # === UI States ===
 for k in ["reset_form", "search_triggered", "edit_trigger", "edit_index"]:
@@ -658,47 +658,6 @@ with st.form("add_form"):
             st.rerun()
         except ValueError:
             st.error("❌ Vui lòng nhập đúng định dạng Giá và Diện tích.")
-
-# === Restore from CSV + ZIP ===
-st.header("📥 Khôi phục dữ liệu từ bản sao lưu")
-csv_restore = st.file_uploader("Tải lên file CSV", type=["csv"], key="restore_csv")
-zip_restore = st.file_uploader("Tải lên file ZIP ảnh", type=["zip"], key="restore_zip")
-
-if st.button("♻️ Phục hồi dữ liệu"):
-    if csv_restore and zip_restore:
-        try:
-            df = pd.read_csv(csv_restore)
-            save_data()
-            shutil.rmtree(IMAGE_DIR)
-            os.makedirs(IMAGE_DIR, exist_ok=True)
-            zip_file = zipfile.ZipFile(zip_restore)
-            zip_file.extractall(IMAGE_DIR)
-            st.success("✅ Phục hồi thành công!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ Lỗi khi phục hồi: {e}")
-    else:
-        st.warning("⚠️ Cần cả file CSV và ZIP ảnh để phục hồi.")
-
-# === Download Section ===
-st.header("💽 Tải xuống dữ liệu")
-csv_export = df.to_csv(index=False).encode("utf-8-sig")
-st.download_button("⬇️ Tải xuống CSV", data=csv_export, file_name="du_lieu_bat_dong_san.csv", mime="text/csv")
-
-def zip_all_images():
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for folder, _, files in os.walk(IMAGE_DIR):
-            for f in files:
-                path = os.path.join(folder, f)
-                arcname = os.path.relpath(path, IMAGE_DIR)
-                z.write(path, arcname)
-    buf.seek(0)
-    return buf
-
-if os.listdir(IMAGE_DIR):
-    image_zip = zip_all_images()
-    st.download_button("🖼️ Tải xuống ảnh", data=image_zip, file_name="anh_nha.zip", mime="application/zip")
 
 # === Search & Display Houses ===
 st.header("🔍 Tìm kiếm nhà")
@@ -795,6 +754,48 @@ else:
                     st.session_state.edit_index = idx
                     st.session_state.edit_trigger = True
                     st.rerun()
+
+# === Restore from CSV + ZIP ===
+st.header("📥 Khôi phục dữ liệu từ bản sao lưu")
+csv_restore = st.file_uploader("Tải lên file CSV", type=["csv"], key="restore_csv")
+zip_restore = st.file_uploader("Tải lên file ZIP ảnh", type=["zip"], key="restore_zip")
+
+if st.button("♻️ Phục hồi dữ liệu"):
+    if csv_restore and zip_restore:
+        try:
+            df = pd.read_csv(csv_restore)
+            save_data()
+            shutil.rmtree(IMAGE_DIR)
+            os.makedirs(IMAGE_DIR, exist_ok=True)
+            zip_file = zipfile.ZipFile(zip_restore)
+            zip_file.extractall(IMAGE_DIR)
+            st.success("✅ Phục hồi thành công!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Lỗi khi phục hồi: {e}")
+    else:
+        st.warning("⚠️ Cần cả file CSV và ZIP ảnh để phục hồi.")
+
+# === Download Section ===
+st.header("💽 Tải xuống dữ liệu")
+csv_export = df.to_csv(index=False).encode("utf-8-sig")
+st.download_button("⬇️ Tải xuống CSV", data=csv_export, file_name="du_lieu_bat_dong_san.csv", mime="text/csv")
+
+def zip_all_images():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for folder, _, files in os.walk(IMAGE_DIR):
+            for f in files:
+                path = os.path.join(folder, f)
+                arcname = os.path.relpath(path, IMAGE_DIR)
+                z.write(path, arcname)
+    buf.seek(0)
+    return buf
+
+if os.listdir(IMAGE_DIR):
+    image_zip = zip_all_images()
+    st.download_button("🖼️ Tải xuống ảnh", data=image_zip, file_name="anh_nha.zip", mime="application/zip")
+
 
 # === Edit Form ===
 if st.session_state.edit_trigger and st.session_state.edit_index is not None:
